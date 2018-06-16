@@ -31,6 +31,7 @@
 #define RB_WAKEUP_CHARGE_TIMEOUT  2000
 
 #include <SoftwareSerial.h>
+#include <MemoryFree.h>
 
 typedef struct
 {
@@ -46,17 +47,25 @@ rockBlockMessage Messages[MESSAGE_QUEUE_LENGTH];
 SoftwareSerial Sat(RB_TX_PIN,RB_RX_PIN);
 
 byte lastError = ERROR_NO_ERROR;
+unsigned long lastInterrupt = millis();
 unsigned long lastSendAttempt = 0;
+unsigned long lastModuleAction = millis();
 
 void setup()
 {
   Setup_Serial(); 
   Setup_Pins();
   Setup_Module();
-
+  Setup_Interrupts();
+  
   Serial.println("==RockBlock 9603 Wrapper Start up==");
 
-  Test();
+  ISR_Test();
+}
+
+void Setup_Interrupts()
+{
+  attachInterrupt(digitalPinToInterrupt(TEST_INT_PIN), ISR_Test, CHANGE);
 }
 
 void Setup_Module()
@@ -112,7 +121,12 @@ bool CheckAsleep()
   return false;
 }
 
-int SendMessage(int MsgID)
+int SendBinaryMessage(int MsgID)
+{
+  
+}
+
+int SendTextMessage(int MsgID)
 {
   Serial.print("Attempting to send message ID: ");
   Serial.println(MsgID, DEC);
@@ -126,7 +140,11 @@ int SendMessage(int MsgID)
     return MESSAGE_STATUS_QUEUED;
   }
   Serial.println("  Module can Communicate");
-  String msg = "AT+SBDWT=\'Test Message - from queue - and space!\'";
+  
+  String msg = "AT+SBDWT=\"";
+  msg += Messages[MsgID].Message;
+  msg += "\"";
+  
   if(SendCommandToModule(msg))
   {
     if(StartSatComm())
@@ -137,23 +155,39 @@ int SendMessage(int MsgID)
   }
 }
 
+int ParseReturnCode(String response)
+{
+  if(response.indexOf("+SBDIX: ") > 0)
+  {
+    response = response.substring(response.indexOf("+SBDIX: ") + 8, response.indexOf(",",response.indexOf("+SBDIX: ") + 8)); 
+  }
+  return response.toInt();
+}
+
 bool StartSatComm()
 {
+  Serial.println("  Starting exchange.");
   String resp = "";
   Sat.println("AT+SBDIX");
-  delay(30000);
-  while(Sat.available() > 0)
+  
+  unsigned long xmitStart = millis();
+  while((xmitStart + 180000) > millis())
+  {
+    Serial.print(".");
+    delay(1000);
+  }
+  
+  if(Sat.available() > 0)
   {
     resp = Sat.readString();
   }
-  Serial.print("got response: ");
-  Serial.println(resp);
-  if(resp.indexOf("+SBDIX: 3,") > 0 || resp.indexOf("+SBDIX: 2,") > 0 || resp.indexOf("+SBDIX: 0,") > 0 || resp.indexOf("+SBDIX: 18,") > 0)
+
+  int returnCode=ParseReturnCode(resp);
+  
+  if(returnCode >= 0 && returnCode <= 5)
   { 
-    Serial.println("    Send successful");
     return true;
   }
-  Serial.println("    Send Failed");
   return false;
 }
 
@@ -186,6 +220,11 @@ void WakeUp()
 {
   digitalWrite(RB_SLEEP_PIN,HIGH);
   delay(RB_WAKEUP_CHARGE_TIMEOUT);
+}
+
+void Sleep()
+{
+  digitalWrite(RB_SLEEP_PIN, LOW);
 }
 
 
@@ -221,10 +260,11 @@ void RemoveMsgFromQueue(int slot)
   SortQueue();
 }
 
-void Test()
+void ISR_Test()
 {
+  if(lastInterrupt + 200 > millis()) return;
   rockBlockMessage TestMsg;
-  String MsgTxt = "Test Message - From Space!";
+  String MsgTxt = "Test Message - From Space! - 141";
   
   TestMsg.Status = MESSAGE_STATUS_QUEUED;
   TestMsg.queueTime[1] = 12;
@@ -234,19 +274,36 @@ void Test()
   MsgTxt.toCharArray(TestMsg.Message, MESSAGE_LENGTH);
   Serial.println("Adding Message");
   AddMsgToQueue(TestMsg);
+  lastInterrupt = millis();
 }
 
 void loop()
 {
-  delay(5000);
-  Serial.println("in main loop");
-  for(int i = 0; i < MESSAGE_QUEUE_LENGTH; i++)
+  if ((lastSendAttempt + MIN_TIME_BETWEEN_TRANSMIT) < millis())
   {
-    if(Messages[i].Status == MESSAGE_STATUS_SENT) RemoveMsgFromQueue(i);
-    if((Messages[i].Status == MESSAGE_STATUS_QUEUED) && ((lastSendAttempt + MIN_TIME_BETWEEN_TRANSMIT) < millis()))
+    for(int i = 0; i < MESSAGE_QUEUE_LENGTH; i++)
     {
-      Messages[i].Status = SendMessage(i);
-      lastSendAttempt = millis();
+      if(Messages[i].Status == MESSAGE_STATUS_SENT) RemoveMsgFromQueue(i);
+      if(Messages[i].Status == MESSAGE_STATUS_QUEUED)
+      {
+        if(Messages[i].messageType == MESSAGE_TYPE_TEXT) Messages[i].Status = SendTextMessage(i);
+        if(Messages[i].messageType == MESSAGE_TYPE_BINARY) Messages[i].Status = SendBinaryMessage(i);  
+        lastModuleAction = millis();  
+      }
     }
+    lastSendAttempt = millis();
   }
+  
+  //if we have not used the module for 5 minutes put it to sleep
+  if ((lastModuleAction + 300000) < millis())
+  {
+    if(!CheckAsleep())
+    {
+      Serial.println("Putting module to sleep.");
+      Sleep();
+    } 
+  }
+
+  Serial.println(freeMemory());
+  delay(1000);
 }
