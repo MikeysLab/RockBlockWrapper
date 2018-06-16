@@ -1,6 +1,6 @@
 #define I2C_SLAVE_ADDRESS         0x02
 
-#define MESSAGE_QUEUE_LENGTH      1
+#define MESSAGE_QUEUE_LENGTH      2
 #define MESSAGE_LENGTH            200
 
 #define ERROR_NO_ERROR            -1
@@ -39,7 +39,7 @@ typedef struct
   byte Priority;
   byte messageType;
   char Message[MESSAGE_LENGTH];
-  byte Status;
+  byte Status = 0;
 } rockBlockMessage;
 
 rockBlockMessage Messages[MESSAGE_QUEUE_LENGTH];
@@ -300,14 +300,21 @@ void ISR_Test()
   rockBlockMessage TestMsg;
   String MsgTxt = "Test Message - From Space!";
   
-  TestMsg.Status = MESSAGE_STATUS_NONE;
+  TestMsg.Status = MESSAGE_STATUS_QUEUED;
   TestMsg.queueTime[1] = 12;
   TestMsg.queueTime[2] = 13;
   TestMsg.Priority = MESSAGE_PRIORITY_NORMAL;
   TestMsg.messageType = MESSAGE_TYPE_TEXT;
   MsgTxt.toCharArray(TestMsg.Message, MESSAGE_LENGTH);
 
-  AddMsgToQueue(TestMsg);
+  if(AddMsgToQueue(TestMsg))
+  {
+    Serial.println("Added");
+  }
+  else
+  {
+    Serial.println("Error");
+  }
   lastInterrupt = millis();
 }
 
@@ -315,10 +322,10 @@ void loop()
 {
   for(int i = 0; i < MESSAGE_QUEUE_LENGTH; i++)
   {
-    if((Messages[i].Status > MESSAGE_STATUS_SENT) && ((lastSendAttempt + MIN_TIME_BETWEEN_TRANSMIT) < millis()))
+    if(Messages[i].Status == MESSAGE_STATUS_SENT) RemoveMsgFromQueue(i);
+    if((Messages[i].Status == MESSAGE_STATUS_QUEUED) && ((lastSendAttempt + MIN_TIME_BETWEEN_TRANSMIT) < millis()))
     {
       Messages[i].Status = SendMessage(i);
-      if(Messages[i].Status == MESSAGE_STATUS_SENT) RemoveMsgFromQueue(i);
       lastSendAttempt = millis();
     }
   }
