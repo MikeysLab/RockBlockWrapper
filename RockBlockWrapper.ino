@@ -315,7 +315,7 @@ void loop()
 {
   for(int i = 0; i < MESSAGE_QUEUE_LENGTH; i++)
   {
-    if(((Messages[i].Status != MESSAGE_STATUS_SENT) || (Messages[i].Status != MESSAGE_STATUS_NONE))  && ((lastSendAttempt + MIN_TIME_BETWEEN_TRANSMIT) < millis()))
+    if((Messages[i].Status > MESSAGE_STATUS_SENT) && ((lastSendAttempt + MIN_TIME_BETWEEN_TRANSMIT) < millis()))
     {
       Messages[i].Status = SendMessage(i);
       if(Messages[i].Status == MESSAGE_STATUS_SENT) RemoveMsgFromQueue(i);
