@@ -121,25 +121,46 @@ bool CheckAsleep()
   return false;
 }
 
-int SendBinaryMessage(int MsgID)
+bool PrepareToSend()
 {
-  
-}
-
-int SendTextMessage(int MsgID)
-{
-  Serial.print("Attempting to send message ID: ");
-  Serial.println(MsgID, DEC);
   if(CheckAsleep()) WakeUp();
   Serial.println("  Module is awake");
-  //if(!CheckNetwork()) return MESSAGE_STATUS_QUEUED; //keep message in queue
+  
+  if(!CheckNetwork())
+  {
+    Serial.println("  Network not found");
+    return false;
+  }
+  else
+  {
+    Serial.println("  Network found");
+  }
+  
   if(!CheckModuleComm())
   {
     Serial.println("  Module can not communicate");
     lastError = ERROR_NO_MODULE_COMM;
-    return MESSAGE_STATUS_QUEUED;
+    return false;
   }
   Serial.println("  Module can Communicate");
+  return true;
+}
+
+int SendBinaryMessage(int MsgID)
+{
+  Serial.print("Attempting to send binary message ID: ");
+  Serial.println(MsgID, DEC);
+  
+  if (!PrepareToSend()) return MESSAGE_STATUS_QUEUED;
+ 
+}
+
+int SendTextMessage(int MsgID)
+{
+  Serial.print("Attempting to send text message ID: ");
+  Serial.println(MsgID, DEC);
+  
+  if (!PrepareToSend()) return MESSAGE_STATUS_QUEUED;
   
   String msg = "AT+SBDWT=\"";
   msg += Messages[MsgID].Message;
@@ -171,14 +192,16 @@ bool StartSatComm()
   Sat.println("AT+SBDIX");
   
   unsigned long xmitStart = millis();
-  while((xmitStart + 180000) > millis())
+  while((xmitStart + 45000) > millis())
   {
     Serial.print(".");
     delay(1000);
   }
   
-  if(Sat.available() > 0)
+  while(Sat.available() > 0)
   {
+    Serial.println(freeMemory());
+    delay(1000);
     resp = Sat.readString();
   }
 
@@ -264,7 +287,7 @@ void ISR_Test()
 {
   if(lastInterrupt + 200 > millis()) return;
   rockBlockMessage TestMsg;
-  String MsgTxt = "Test Message - From Space! - 141";
+  String MsgTxt = "Yay - I did not break something";
   
   TestMsg.Status = MESSAGE_STATUS_QUEUED;
   TestMsg.queueTime[1] = 12;
@@ -303,7 +326,4 @@ void loop()
       Sleep();
     } 
   }
-
-  Serial.println(freeMemory());
-  delay(1000);
 }
