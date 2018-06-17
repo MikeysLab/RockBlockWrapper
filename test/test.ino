@@ -200,8 +200,6 @@ bool StartSatComm()
   
   while(Sat.available() > 0)
   {
-    Serial.println(freeMemory());
-    delay(1000);
     resp = Sat.readString();
   }
 
