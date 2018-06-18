@@ -35,9 +35,9 @@
 
 typedef struct
 {
-  byte queueTime[2];
+  byte QueueTime[2];
   byte Priority;
-  byte messageType;
+  byte MessageType;
   char Message[MESSAGE_LENGTH];
   byte Status;
 } rockBlockMessage;
@@ -88,17 +88,17 @@ void Setup_Serial()
 
 void SortQueue()
 {
-  for (int x=5; x>0; x--)
+  for (int i=MESSAGE_QUEUE_LENGTH; i>0; i--)
   {
     int swaps = 0;
     rockBlockMessage msgAux;
-    for(int i=1; i<x; i++)
+    for(int x=1; x<i; x++)
     {
-      if (Messages[i-1].Priority < Messages[i].Priority)
+      if (Messages[x-1].Priority < Messages[x].Priority)
       {
-        msgAux = Messages[i-1];
-        Messages[i-1] = Messages[i];
-        Messages[i] = msgAux;
+        msgAux = Messages[x-1];
+        Messages[x-1] = Messages[x];
+        Messages[x] = msgAux;
         swaps++;
       }
     }
@@ -267,6 +267,8 @@ int DetermineNextSlot()
   {
     if (Messages[i].Status == MESSAGE_STATUS_NONE) return i;
   }
+
+  
   lastError = ERROR_QUEUE_FULL;
   return ERROR_QUEUE_FULL;
 }
