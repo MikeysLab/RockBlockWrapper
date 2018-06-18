@@ -1,3 +1,7 @@
+#include <Wire.h>
+#include <SoftwareSerial.h>
+#include "DataStructures.h"
+
 #define I2C_SLAVE_ADDRESS         0x02
 
 #define MESSAGE_QUEUE_LENGTH      5
@@ -30,25 +34,14 @@
 
 #define RB_WAKEUP_CHARGE_TIMEOUT  2000
 
-#include <SoftwareSerial.h>
-
-typedef struct
-{
-  byte QueueTime[2];
-  byte Priority;
-  byte MessageType;
-  char Message[MESSAGE_LENGTH];
-  byte Status;
-} rockBlockMessage;
-
 rockBlockMessage Messages[MESSAGE_QUEUE_LENGTH];
 
 SoftwareSerial Sat(RB_TX_PIN,RB_RX_PIN);
 
 byte lastError = ERROR_NO_ERROR;
-unsigned long lastInterrupt = millis();
-unsigned long lastSendAttempt = 0;
-unsigned long lastModuleAction = millis();
+unsigned long lastInterrupt;
+unsigned long lastSendAttempt;
+unsigned long lastModuleAction;
 
 void setup()
 {
@@ -59,7 +52,7 @@ void setup()
   
   Serial.println("==RockBlock 9603 Wrapper Start up==");
 
-  ISR_Test();
+  //ISR_Test();
 }
 
 void Setup_Interrupts()
@@ -151,7 +144,6 @@ int SendBinaryMessage(int MsgID)
   Serial.println(MsgID, DEC);
   
   if (!PrepareToSend()) return MESSAGE_STATUS_QUEUED;
- 
 }
 
 int SendTextMessage(int MsgID)
@@ -246,7 +238,6 @@ void Sleep()
 {
   digitalWrite(RB_SLEEP_PIN, LOW);
 }
-
 
 bool AddMsgToQueue(rockBlockMessage msg)
 {
