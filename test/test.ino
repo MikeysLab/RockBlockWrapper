@@ -51,8 +51,6 @@ void setup()
   Setup_Interrupts();
   
   Serial.println("==RockBlock 9603 Wrapper Start up==");
-
-  //ISR_Test();
 }
 
 void Setup_Interrupts()
