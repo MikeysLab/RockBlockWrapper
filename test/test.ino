@@ -237,12 +237,12 @@ void Sleep()
   digitalWrite(RB_SLEEP_PIN, LOW);
 }
 
-bool AddMsgToQueue(rockBlockMessage msg)
+bool AddMsgToQueue(rockBlockMessage *Pmsg)
 {
   int MessageSlot = DetermineNextSlot();
   if(MessageSlot != ERROR_QUEUE_FULL)
   {
-    Messages[MessageSlot] = msg;
+    Messages[MessageSlot] = *Pmsg;
     SortQueue();
     return true;
   }
@@ -284,7 +284,7 @@ void ISR_Test()
   TestMsg.MessageType = MESSAGE_TYPE_TEXT;
   MsgTxt.toCharArray(TestMsg.Message, MESSAGE_LENGTH);
   Serial.println("Adding Message");
-  AddMsgToQueue(TestMsg);
+  AddMsgToQueue(&TestMsg);
   lastInterrupt = millis();
 }
 
