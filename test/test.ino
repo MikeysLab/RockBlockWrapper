@@ -31,7 +31,6 @@
 #define RB_WAKEUP_CHARGE_TIMEOUT  2000
 
 #include <SoftwareSerial.h>
-#include <MemoryFree.h>
 
 typedef struct
 {
@@ -276,9 +275,9 @@ int DetermineNextSlot()
 void RemoveMsgFromQueue(int slot)
 {
   Messages[slot].Status = MESSAGE_STATUS_NONE;
-  Messages[slot].queueTime[0] = 0;
+  Messages[slot].QueueTime[0] = 0;
   Messages[slot].Priority = 0;
-  Messages[slot].messageType = 0;
+  Messages[slot].MessageType = 0;
   Messages[slot].Message[0] = 0;
   SortQueue();
 }
@@ -290,10 +289,10 @@ void ISR_Test()
   String MsgTxt = "Yay - I did not break something";
   
   TestMsg.Status = MESSAGE_STATUS_QUEUED;
-  TestMsg.queueTime[1] = 12;
-  TestMsg.queueTime[2] = 13;
+  TestMsg.QueueTime[1] = 12;
+  TestMsg.QueueTime[2] = 13;
   TestMsg.Priority = MESSAGE_PRIORITY_NORMAL;
-  TestMsg.messageType = MESSAGE_TYPE_TEXT;
+  TestMsg.MessageType = MESSAGE_TYPE_TEXT;
   MsgTxt.toCharArray(TestMsg.Message, MESSAGE_LENGTH);
   Serial.println("Adding Message");
   AddMsgToQueue(TestMsg);
@@ -309,8 +308,8 @@ void loop()
       if(Messages[i].Status == MESSAGE_STATUS_SENT) RemoveMsgFromQueue(i);
       if(Messages[i].Status == MESSAGE_STATUS_QUEUED)
       {
-        if(Messages[i].messageType == MESSAGE_TYPE_TEXT) Messages[i].Status = SendTextMessage(i);
-        if(Messages[i].messageType == MESSAGE_TYPE_BINARY) Messages[i].Status = SendBinaryMessage(i);  
+        if(Messages[i].MessageType == MESSAGE_TYPE_TEXT) Messages[i].Status = SendTextMessage(i);
+        if(Messages[i].MessageType == MESSAGE_TYPE_BINARY) Messages[i].Status = SendBinaryMessage(i);  
         lastModuleAction = millis();  
       }
     }
