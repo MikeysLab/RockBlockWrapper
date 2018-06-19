@@ -7,7 +7,6 @@ rockBlockMessage Messages[MESSAGE_QUEUE_LENGTH];
 
 SoftwareSerial Sat(RB_TX_PIN,RB_RX_PIN);
 
-byte lastError = ERROR_NO_ERROR;
 unsigned long lastInterrupt;
 unsigned long lastSendAttempt;
 unsigned long lastModuleAction;
@@ -96,7 +95,6 @@ bool PrepareToSend()
 	if(!CheckModuleComm())
 	{
 		Serial.println("  Module can not communicate");
-		lastError = ERROR_NO_MODULE_COMM;
 		return false;
 	}
 	Serial.println("  Module can Communicate");
@@ -210,7 +208,7 @@ void Sleep()
 
 bool AddMsgToQueue(rockBlockMessage *Pmsg)
 {
-	int MessageSlot = DetermineNextSlot();
+	int MessageSlot = DetermineNextSlot(Pmsg->Priority);
 	if(MessageSlot != ERROR_QUEUE_FULL)
 	{
 		Messages[MessageSlot] = *Pmsg;
@@ -220,7 +218,7 @@ bool AddMsgToQueue(rockBlockMessage *Pmsg)
 	return false;
 }
 
-int DetermineNextSlot()
+int DetermineNextSlot(int priority)
 {
 	for(int i=0; i < MESSAGE_QUEUE_LENGTH; i++)
 	{
@@ -229,7 +227,17 @@ int DetermineNextSlot()
 			return i;
 		}
 	}
-	lastError = ERROR_QUEUE_FULL;
+
+	//okay the queue is full, something to bump?
+	for (int i = 0; i < MESSAGE_QUEUE_LENGTH; i++)
+	{
+		if (Messages[i].Priority < priority)
+		{
+			return i;
+		}
+	}
+
+	//queue is full, no lower priority to bump, return nope.
 	return ERROR_QUEUE_FULL;
 }
 
@@ -300,4 +308,5 @@ void loop()
 			Sleep();
 		} 
 	}
+	delay(1000);
 }
