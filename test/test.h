@@ -1,7 +1,7 @@
 #pragma once
 
-#define MESSAGE_QUEUE_LENGTH      5
-#define MESSAGE_LENGTH            100
+#define MESSAGE_QUEUE_LENGTH      3
+#define MESSAGE_LENGTH            200
 #define I2C_SLAVE_ADDRESS         0x02
 
 #define ERROR_NO_ERROR            -2

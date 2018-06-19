@@ -111,38 +111,37 @@ int SendBinaryMessage(int MsgID)
 
 int SendTextMessage(int MsgID)
 {
-  Serial.print("Attempting to send text message ID: ");
-  Serial.println(MsgID, DEC);
+	Serial.print("Attempting to send text message ID: ");
+	Serial.println(MsgID, DEC);
   
-  if (!PrepareToSend()) return MESSAGE_STATUS_QUEUED;
-  char msg[11 + MESSAGE_LENGTH];
+	if (!PrepareToSend()) return MESSAGE_STATUS_QUEUED;
+	char msg[19 + MESSAGE_LENGTH];
 
-  sprintf(msg, "AT+SBDWT=\"%s\"", Messages[MsgID].Message);
+	sprintf(msg, "AT+SBDWT=\"%d:%d - %s\"", Messages[MsgID].QueueTime[0], Messages[MsgID].QueueTime[1], Messages[MsgID].Message);
+	Serial.println(msg);
   
-  if(SendCommandToModule(msg))
-  {
-    if(StartSatComm())
-    {
-      Serial.println("  Message sent");
-      return MESSAGE_STATUS_SENT;
-    }
-  }
+	if (SendCommandToModule(msg))
+	{
+		if (StartSatComm())
+		{
+			Serial.println("  Message sent");
+			return MESSAGE_STATUS_SENT;
+		}
+	}
 }
 
 int ParseReturnCode(char *Presponse)
 {
-	int retCode;
-	if (sscanf(Presponse, "+SBDIX: %d,", &retCode))
-	{
-		return retCode;
-	}
-	return -1;
+	char *start = strstr(Presponse, "+SBDIX: ");
+	start += 8;
+
+	return atoi(start);
 }
 
 bool StartSatComm()
 {
 	Serial.println("  Starting exchange.");
-	char resp[100] = "";
+	char resp[200] = "";
 	Sat.println("AT+SBDIX");
   
 	unsigned long xmitStart = millis();
@@ -153,18 +152,21 @@ bool StartSatComm()
 	}
   
 	int i = 0;
-	while (Sat.available() > 0 && i < 100)
+	while (Sat.available() > 0 && i < 200)
 	{
 		resp[i] = Sat.read();
 		i++;
 	}
 
 	int returnCode=ParseReturnCode(&resp[0]);
+	Serial.println(returnCode);
   
 	if(returnCode >= 0 && returnCode <= 5)
 	{ 
+		Serial.println("true");
 		return true;
 	}
+	Serial.println("false");
 	return false;
 }
 
@@ -257,13 +259,12 @@ void ISR_Test()
 	rockBlockMessage TestMsg;
   
 	TestMsg.Status = MESSAGE_STATUS_QUEUED;
-	TestMsg.QueueTime[1] = 12;
-	TestMsg.QueueTime[2] = 13;
+	TestMsg.QueueTime[0] = 12;
+	TestMsg.QueueTime[1] = 13;
 	TestMsg.Priority = MESSAGE_PRIORITY_NORMAL;
 	TestMsg.MessageType = MESSAGE_TYPE_TEXT;
-  
-	char *pMsg = TestMsg.Message;
-	pMsg = "Yay - I did not break something";
+ 
+	sprintf(TestMsg.Message, "Yay - Still works!");
   
 	Serial.println("Adding Message");
 	AddMsgToQueue(&TestMsg);
