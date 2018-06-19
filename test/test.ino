@@ -106,7 +106,10 @@ int SendBinaryMessage(int MsgID)
 	Serial.print("Attempting to send binary message ID: ");
 	Serial.println(MsgID, DEC);
   
-	if (!PrepareToSend()) return MESSAGE_STATUS_QUEUED;
+	if (!PrepareToSend())
+	{
+		return MESSAGE_STATUS_QUEUED;
+	}
 }
 
 int SendTextMessage(int MsgID)
@@ -114,7 +117,11 @@ int SendTextMessage(int MsgID)
 	Serial.print("Attempting to send text message ID: ");
 	Serial.println(MsgID, DEC);
   
-	if (!PrepareToSend()) return MESSAGE_STATUS_QUEUED;
+	if (!PrepareToSend())
+	{
+		return MESSAGE_STATUS_QUEUED;
+	}
+	
 	char msg[19 + MESSAGE_LENGTH];
 
 	sprintf(msg, "AT+SBDWT=\"%d:%d - %s\"", Messages[MsgID].QueueTime[0], Messages[MsgID].QueueTime[1], Messages[MsgID].Message);
@@ -255,7 +262,11 @@ void RemoveMsgFromQueue(int slot)
 
 void ISR_Test()
 {
-	if(lastInterrupt + 200 > millis()) return;
+	if (lastInterrupt + 200 > millis())
+	{
+		return;
+	}
+
 	rockBlockMessage TestMsg;
   
 	TestMsg.Status = MESSAGE_STATUS_QUEUED;
@@ -293,7 +304,6 @@ void loop()
 				{
 					Messages[i].Status = SendBinaryMessage(i);
 				}
-
 				lastModuleAction = millis();  
 			}
 		}
