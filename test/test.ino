@@ -11,6 +11,8 @@ unsigned long lastInterrupt;
 unsigned long lastSendAttempt;
 unsigned long lastModuleAction;
 
+bool messageWaiting = false;
+
 void setup()
 {
 	Setup_Serial(); 
@@ -24,6 +26,7 @@ void setup()
 void Setup_Interrupts()
 {
 	attachInterrupt(digitalPinToInterrupt(TEST_INT_PIN), ISR_Test, CHANGE);
+	attachInterrupt(digitalPinToInterrupt(RB_MSG_INT_PIN), ISR_MessageWaiting, CHANGE);
 }
 
 void Setup_Module()
@@ -34,7 +37,7 @@ void Setup_Module()
 void Setup_Pins()
 {
 	pinMode(RB_SLEEP_PIN, OUTPUT);
-	pinMode(RB_SAT_INT_PIN, INPUT);
+	pinMode(RB_MSG_INT_PIN, INPUT);
 	pinMode(TEST_INT_PIN, INPUT);
 }
 
@@ -44,32 +47,9 @@ void Setup_Serial()
 	Sat.begin(19200);
 }
 
-void SortQueue()
-{
-	for (int i=MESSAGE_QUEUE_LENGTH; i>0; i--)
-	{
-		int swaps = 0;
-		rockBlockMessage msgAux;
-		for(int x=1; x<i; x++)
-		{
-			if (Messages[x-1].Priority < Messages[x].Priority)
-			{
-				msgAux = Messages[x-1];
-				Messages[x-1] = Messages[x];
-				Messages[x] = msgAux;
-				swaps++;
-			}
-		}
-		if (!swaps)
-		{
-			break;
-		}
-	}
-}
-
 bool CheckNetwork()
 {
-	return digitalRead(RB_SAT_INT_PIN) == HIGH;
+	return digitalRead(RB_SAT_PIN) == HIGH;
 }
 
 bool CheckAsleep()
@@ -107,7 +87,24 @@ int SendBinaryMessage(int MsgID)
 	Serial.println(MsgID, DEC);
   
 	if (!PrepareToSend()) return MESSAGE_STATUS_QUEUED;
+
+	char msg[15];
+
+	sprintf(msg, "AT+SBDWB=\"%d\"", MESSAGE_LENGTH);
+	Serial.println(msg);
+
+	//TODO: Wait for READY from the module and send the serial data to the module
+
+	if (SendCommandToModule(msg))
+	{
+		if (StartSatComm())
+		{
+
+
+		}
+	}
 }
+
 
 int SendTextMessage(int MsgID)
 {
@@ -118,7 +115,6 @@ int SendTextMessage(int MsgID)
 	char msg[19 + MESSAGE_LENGTH];
 
 	sprintf(msg, "AT+SBDWT=\"%d:%d - %s\"", Messages[MsgID].QueueTime[0], Messages[MsgID].QueueTime[1], Messages[MsgID].Message);
-	Serial.println(msg);
   
 	if (SendCommandToModule(msg))
 	{
@@ -210,17 +206,16 @@ void Sleep()
 
 bool AddMsgToQueue(rockBlockMessage *Pmsg)
 {
-	int MessageSlot = DetermineNextSlot(Pmsg->Priority);
+	int MessageSlot = DetermineNextSlot();
 	if(MessageSlot != ERROR_QUEUE_FULL)
 	{
 		Messages[MessageSlot] = *Pmsg;
-		SortQueue();
 		return true;
 	}
 	return false;
 }
 
-int DetermineNextSlot(int priority)
+int DetermineNextSlot()
 {
 	for(int i=0; i < MESSAGE_QUEUE_LENGTH; i++)
 	{
@@ -230,16 +225,7 @@ int DetermineNextSlot(int priority)
 		}
 	}
 
-	//okay the queue is full, something to bump?
-	for (int i = 0; i < MESSAGE_QUEUE_LENGTH; i++)
-	{
-		if (Messages[i].Priority < priority)
-		{
-			return i;
-		}
-	}
-
-	//queue is full, no lower priority to bump, return nope.
+	//queue is full, return nope.
 	return ERROR_QUEUE_FULL;
 }
 
@@ -247,10 +233,13 @@ void RemoveMsgFromQueue(int slot)
 {
 	Messages[slot].Status = MESSAGE_STATUS_NONE;
 	Messages[slot].QueueTime[0] = 0;
-	Messages[slot].Priority = 0;
 	Messages[slot].MessageType = 0;
 	Messages[slot].Message[0] = 0;
-	SortQueue();
+}
+
+void ISR_MessageWaiting()
+{
+	messageWaiting = true;
 }
 
 void ISR_Test()
@@ -261,7 +250,6 @@ void ISR_Test()
 	TestMsg.Status = MESSAGE_STATUS_QUEUED;
 	TestMsg.QueueTime[0] = 12;
 	TestMsg.QueueTime[1] = 13;
-	TestMsg.Priority = MESSAGE_PRIORITY_NORMAL;
 	TestMsg.MessageType = MESSAGE_TYPE_TEXT;
  
 	sprintf(TestMsg.Message, "Yay - Still works!");
@@ -308,6 +296,11 @@ void loop()
 			Serial.println("Putting module to sleep.");
 			Sleep();
 		} 
+	}
+
+	if (messageWaiting)
+	{
+		//we need to pull the message from the module and add it into our queue
 	}
 	delay(1000);
 }
