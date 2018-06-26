@@ -13,10 +13,7 @@
 
 #define MESSAGE_TYPE_TEXT         1
 #define MESSAGE_TYPE_BINARY       2
-
-#define MESSAGE_PRIORITY_NORMAL   0
-#define MESSAGE_PRIORITY_HIGH     1
-#define MESSAGE_PRIORITY_CRITICAL 2
+#define MESSAGE_TYPE_RECIEVED	  3
 
 #define MESSAGE_STATUS_NONE       0
 #define MESSAGE_STATUS_SENT       1
@@ -24,9 +21,11 @@
 #define MESSAGE_STATUS_ERROR      3
 
 #define RB_SLEEP_PIN              5
-#define RB_SAT_INT_PIN            3
+#define RB_SAT_PIN                9
 #define RB_TX_PIN                 10
 #define RB_RX_PIN                 11
+#define RB_RING_INT_PIN			  3
 #define TEST_INT_PIN              2
+
 
 #define RB_WAKEUP_CHARGE_TIMEOUT  2000
