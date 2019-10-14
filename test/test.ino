@@ -5,28 +5,27 @@
 
 rockBlockMessage Messages[MESSAGE_QUEUE_LENGTH];
 
-SoftwareSerial Sat(RB_TX_PIN,RB_RX_PIN);
+SoftwareSerial Sat(RB_TX_PIN, RB_RX_PIN);
 
 unsigned long lastInterrupt;
-unsigned long lastSendAttempt;
+unsigned long lastSendAttempt = millis();
 unsigned long lastModuleAction;
 
-bool MessageWaiting = false;
+int MessageWaiting = 0;
 
 void setup()
 {
-	Setup_Serial(); 
+	Setup_Serial();
 	Setup_Pins();
 	Setup_Module();
 	Setup_Interrupts();
-  
+
 	Serial.println("==RockBlock 9603 Wrapper Start up==");
 }
 
 void Setup_Interrupts()
 {
 	attachInterrupt(digitalPinToInterrupt(TEST_INT_PIN), ISR_Test, CHANGE);
-	attachInterrupt(digitalPinToInterrupt(RB_RING_INT_PIN), ISR_Ring, CHANGE);
 }
 
 void Setup_Module()
@@ -39,7 +38,6 @@ void Setup_Pins()
 	pinMode(RB_SLEEP_PIN, OUTPUT);
 	pinMode(RB_SAT_PIN, INPUT);
 	pinMode(TEST_INT_PIN, INPUT);
-	pinMode(RB_RING_INT_PIN, INPUT);
 }
 
 void Setup_Serial()
@@ -65,7 +63,7 @@ bool TurnOffFlowControl()
 
 bool PrepareToSend()
 {
-	if(CheckAsleep()) WakeUp();
+	if (CheckAsleep()) WakeUp();
 	Serial.println("  Module is awake");
 
 	if (!TurnOffFlowControl())
@@ -73,7 +71,7 @@ bool PrepareToSend()
 		return false;
 	}
 
-	if(!CheckNetwork())
+	if (!CheckNetwork())
 	{
 		Serial.println("  Network not found");
 		return false;
@@ -82,8 +80,8 @@ bool PrepareToSend()
 	{
 		Serial.println("  Network found");
 	}
-  
-	if(!CheckModuleComm())
+
+	if (!CheckModuleComm())
 	{
 		Serial.println("  Module can not communicate");
 		return false;
@@ -92,14 +90,14 @@ bool PrepareToSend()
 	return true;
 }
 
-int CalcChecksum(rockBlockMessage *pmessage)
+uint16_t CalcChecksum(rockBlockMessage* pMessage, int byteCount)
 {
-	int total = 0;
-	for (int i = 0; i < MESSAGE_LENGTH; i++)
+	uint16_t checkSum = 0;
+	for (int i = 0; i < byteCount; i++)
 	{
-		total += pmessage->Message[i];
+		checkSum += pMessage->Message[i];
 	}
-	return total;
+	return checkSum;
 }
 
 void Wait(int Seconds)
@@ -119,14 +117,17 @@ int SendBinaryMessage(int MsgID)
 
 	Serial.print("Attempting to send binary message ID: ");
 	Serial.println(MsgID, DEC);
-  
+
 	if (!PrepareToSend())
 	{
 		return MESSAGE_STATUS_QUEUED;
 	}
 
-	int msgSize = MESSAGE_LENGTH * sizeof(char);
-	
+	rockBlockMessage* pMessage = &Messages[MsgID];
+	int messageLength = strlen(pMessage->Message);
+
+	int msgSize = messageLength * sizeof(char);
+
 	sprintf(msg, "AT+SBDWB=%d", msgSize);
 
 	Sat.println(msg);
@@ -139,12 +140,13 @@ int SendBinaryMessage(int MsgID)
 		resp[i] = Sat.read();
 		i++;
 	}
-	
+
 	if (strstr(resp, "READY") > 0)
 	{
-		int CheckSum = CalcChecksum(&Messages[MsgID]);
+		uint16_t checkSum = CalcChecksum(pMessage, messageLength);
 		Sat.write(Messages[MsgID].Message);
-		Sat.write(CheckSum);
+		Sat.write(checkSum >> 8);
+		Sat.write(checkSum & 0xFF);
 
 		Wait(2);
 
@@ -154,7 +156,7 @@ int SendBinaryMessage(int MsgID)
 			resp[i] = Sat.read();
 			i++;
 		}
-		
+
 		if (strstr(resp, "0") > 0 && strstr(resp, "OK"))
 		{
 			if (StartSatComm())
@@ -171,17 +173,17 @@ int SendTextMessage(int MsgID)
 {
 	Serial.print("Attempting to send text message ID: ");
 	Serial.println(MsgID, DEC);
-  
+
 	if (!PrepareToSend())
 	{
 		return MESSAGE_STATUS_QUEUED;
 	}
-	
+
 	char msg[19 + MESSAGE_LENGTH];
 
 	sprintf(msg, "AT+SBDWT=\"%d:%d - %s\"", Messages[MsgID].QueueTime[0], Messages[MsgID].QueueTime[1], Messages[MsgID].Message);
 	Serial.println(msg);
-  
+
 	if (SendCommandToModule(msg))
 	{
 		if (StartSatComm())
@@ -192,9 +194,9 @@ int SendTextMessage(int MsgID)
 	}
 }
 
-int ParseReturnCode(char *Presponse)
+int ParseReturnCode(char* Presponse)
 {
-	char *start = strstr(Presponse, "+SBDIX: ");
+	char* start = strstr(Presponse, "+SBDIX: ");
 	start += 8;
 
 	return atoi(start);
@@ -205,21 +207,20 @@ bool StartSatComm()
 	Serial.println("  Starting exchange.");
 	char resp[200] = "";
 	Sat.println("AT+SBDIX");
-  
+
 	Wait(30);
-  
+
 	int i = 0;
 	while (Sat.available() > 0 && i < 200)
 	{
 		resp[i] = Sat.read();
 		i++;
 	}
+	Serial.println(resp);
+	int returnCode = ParseReturnCode(&resp[0]);
 
-	int returnCode=ParseReturnCode(&resp[0]);
-	Serial.println(returnCode);
-  
-	if(returnCode >= 0 && returnCode <= 5)
-	{ 
+	if (returnCode >= 0 && returnCode <= 5)
+	{
 		Serial.println("true");
 		return true;
 	}
@@ -232,19 +233,19 @@ bool SendCommandToModule(char cmd[20])
 	char resp[100];
 	Sat.println(cmd);
 	Wait(5);
-  
+
 	int i = 0;
-	while(Sat.available() > 0 && i < 99)
-	{ 
+	while (Sat.available() > 0 && i < 99)
+	{
 		resp[i] = Sat.read();
 		i++;
 	}
 
-	if(strstr(resp, "OK") != NULL) 
-	{  
+	if (strstr(resp, "OK") != NULL)
+	{
 		return true;
 	}
-  
+
 	Serial.println(resp);
 	return false;
 }
@@ -256,7 +257,7 @@ bool CheckModuleComm()
 
 void WakeUp()
 {
-	digitalWrite(RB_SLEEP_PIN,HIGH);
+	digitalWrite(RB_SLEEP_PIN, HIGH);
 	delay(RB_WAKEUP_CHARGE_TIMEOUT);
 }
 
@@ -265,10 +266,10 @@ void Sleep()
 	digitalWrite(RB_SLEEP_PIN, LOW);
 }
 
-bool AddMsgToQueue(rockBlockMessage *Pmsg)
+bool AddMsgToQueue(rockBlockMessage* Pmsg)
 {
 	int MessageSlot = DetermineNextSlot();
-	if(MessageSlot != ERROR_QUEUE_FULL)
+	if (MessageSlot != ERROR_QUEUE_FULL)
 	{
 		Messages[MessageSlot] = *Pmsg;
 		return true;
@@ -278,7 +279,7 @@ bool AddMsgToQueue(rockBlockMessage *Pmsg)
 
 int DetermineNextSlot()
 {
-	for(int i=0; i < MESSAGE_QUEUE_LENGTH; i++)
+	for (int i = 0; i < MESSAGE_QUEUE_LENGTH; i++)
 	{
 		if (Messages[i].Status == MESSAGE_STATUS_NONE)
 		{
@@ -286,7 +287,6 @@ int DetermineNextSlot()
 		}
 	}
 
-	//queue is full, no lower priority to bump, return nope.
 	return ERROR_QUEUE_FULL;
 }
 
@@ -306,36 +306,33 @@ void ISR_Test()
 	}
 
 	rockBlockMessage TestMsg;
-  
+
 	TestMsg.Status = MESSAGE_STATUS_QUEUED;
 	TestMsg.QueueTime[0] = 12;
 	TestMsg.QueueTime[1] = 13;
 	TestMsg.MessageType = MESSAGE_TYPE_BINARY;
- 
+
 	sprintf(TestMsg.Message, "Hello");
-  
+
 	Serial.println("Adding Message");
 	AddMsgToQueue(&TestMsg);
 	lastInterrupt = millis();
-}
-
-void ISR_Ring()
-{
-	MessageWaiting = true;
 }
 
 void loop()
 {
 	if ((lastSendAttempt + MIN_TIME_BETWEEN_TRANSMIT) < millis())
 	{
-		for(int i = 0; i < MESSAGE_QUEUE_LENGTH; i++)
+		Serial.println("Exchange attempt");
+		Serial.println("Check Outgoing");
+		for (int i = 0; i < MESSAGE_QUEUE_LENGTH; i++)
 		{
 			if (Messages[i].Status == MESSAGE_STATUS_SENT)
 			{
 				RemoveMsgFromQueue(i);
 			}
 
-			if(Messages[i].Status == MESSAGE_STATUS_QUEUED)
+			if (Messages[i].Status == MESSAGE_STATUS_QUEUED)
 			{
 				if (Messages[i].MessageType == MESSAGE_TYPE_TEXT)
 				{
@@ -346,20 +343,20 @@ void loop()
 				{
 					Messages[i].Status = SendBinaryMessage(i);
 				}
-				lastModuleAction = millis();  
+				lastModuleAction = millis();
 			}
 		}
-    lastSendAttempt = millis();
+
+		lastSendAttempt = millis();
 	}
-  
-	//if we have not used the module for 5 minutes put it to sleep
+	
 	if ((lastModuleAction + 300000) < millis())
 	{
-		if(!CheckAsleep())
+		if (!CheckAsleep())
 		{
 			Serial.println("Putting module to sleep.");
 			Sleep();
-		} 
+		}
 	}
 	delay(1000);
 }
